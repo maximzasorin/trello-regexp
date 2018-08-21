@@ -1,0 +1,4 @@
+/.vscode
+debug
+bolt.db
+bolt.db.lock
