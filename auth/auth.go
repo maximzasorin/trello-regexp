@@ -11,7 +11,7 @@ import (
 // Auth allows auth with trello
 type Auth interface {
 	GetRedirectHandler() http.HandlerFunc
-	GetCallbackHandler() http.HandlerFunc
+	GetCallbackHandler(func(store.MemberAccessToken)) http.HandlerFunc
 }
 
 // Config represents config for auth
@@ -23,7 +23,7 @@ type Config struct {
 }
 
 // NewAuth create new auth object
-func NewAuth(config *Config, store store.Store) Auth {
+func NewAuth(config *Config) Auth {
 	consumer := oauth.NewConsumer(
 		config.Key,
 		config.Secret,
@@ -40,12 +40,11 @@ func NewAuth(config *Config, store store.Store) Auth {
 
 	tokens := make(map[string]*oauth.RequestToken)
 
-	return auth{config, store, consumer, tokens}
+	return auth{config, consumer, tokens}
 }
 
 type auth struct {
 	config   *Config
-	store    store.Store
 	consumer *oauth.Consumer
 	tokens   map[string]*oauth.RequestToken
 }
@@ -61,17 +60,23 @@ func (a auth) GetRedirectHandler() http.HandlerFunc {
 	}
 }
 
-func (a auth) GetCallbackHandler() http.HandlerFunc {
+func (a auth) GetCallbackHandler(callback func(store.MemberAccessToken)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		values := r.URL.Query()
 		code := values.Get("oauth_verifier")
 		token := values.Get("oauth_token")
 
-		accessToken, err := a.consumer.AuthorizeToken(a.tokens[token], code)
-		if err != nil {
-			log.Fatal(err)
+		requestToken, ok := a.tokens[token]
+
+		if !ok {
+			http.Error(w, "Cannot find request token", http.StatusInternalServerError)
 		}
 
-		a.store.SaveToken(accessToken.Token)
+		accessToken, err := a.consumer.AuthorizeToken(requestToken, code)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+
+		callback(store.MemberAccessToken(*accessToken))
 	}
 }

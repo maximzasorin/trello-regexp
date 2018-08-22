@@ -49,25 +49,33 @@ func main() {
 
 	flag.Parse()
 
-	// Create store
-	db, err := bolt.Open("bolt.db", 0600, nil)
-	if err != nil {
-		log.Fatal(err)
-	}
-	store := store.NewStore(db)
-
 	// Create auth
 	auth := auth.NewAuth(&auth.Config{
 		Name:        *appName,
 		CallbackURL: *appURL + "/auth/callback",
 		Key:         *trelloKey,
 		Secret:      *trelloSecret,
-	}, store)
+	})
+
+	// Create store
+	db, err := bolt.Open("bolt.db", 0600, nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	s := store.NewStore(db)
+
+	trello := trello.NewTrello()
+
+	// Create handlers
+	redirectHandler := auth.GetRedirectHandler()
+	callbackHandler := auth.GetCallbackHandler(func(accessToken store.MemberAccessToken) {
+		s.SaveToken(&accessToken)
+	})
 
 	// Routes
 	http.HandleFunc("/", serveHomePage)
-	http.HandleFunc("/auth", auth.GetRedirectHandler())
-	http.HandleFunc("/auth/callback", auth.GetCallbackHandler())
+	http.HandleFunc("/auth", redirectHandler)
+	http.HandleFunc("/auth/callback", callbackHandler)
 
 	err = http.ListenAndServe(":8080", nil)
 

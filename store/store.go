@@ -4,11 +4,25 @@ import (
 	"fmt"
 
 	"github.com/coreos/bbolt"
+	"github.com/mrjones/oauth"
 )
 
 // Store for everything
 type Store interface {
-	SaveToken(token string)
+	SaveToken(*MemberAccessToken)
+}
+
+// Member represents Trello user
+type Member struct {
+	ID          string
+	accessToken oauth.AccessToken
+}
+
+// MemberAccessToken represents user's token for access to Trello API
+type MemberAccessToken struct {
+	Token          string
+	Secret         string
+	AdditionalData map[string]string
 }
 
 // NewStore creates new store
@@ -20,6 +34,6 @@ type store struct {
 	db *bolt.DB
 }
 
-func (s *store) SaveToken(token string) {
-	fmt.Println("token saved " + token)
+func (s *store) SaveToken(accessToken *MemberAccessToken) {
+	fmt.Println("token saved " + accessToken.Token)
 }
