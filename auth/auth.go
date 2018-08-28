@@ -1,6 +1,8 @@
 package auth
 
 import (
+	"encoding/json"
+	"io/ioutil"
 	"log"
 	"net/http"
 
@@ -11,7 +13,7 @@ import (
 // Auth allows auth with trello
 type Auth interface {
 	GetRedirectHandler() http.HandlerFunc
-	GetCallbackHandler(func(store.MemberAccessToken)) http.HandlerFunc
+	GetCallbackHandler(func(string, store.MemberAccessToken)) http.HandlerFunc
 }
 
 // Config represents config for auth
@@ -49,6 +51,10 @@ type auth struct {
 	tokens   map[string]*oauth.RequestToken
 }
 
+type member struct {
+	ID string
+}
+
 func (a auth) GetRedirectHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		token, requestURL, err := a.consumer.GetRequestTokenAndUrl(a.config.CallbackURL)
@@ -60,23 +66,53 @@ func (a auth) GetRedirectHandler() http.HandlerFunc {
 	}
 }
 
-func (a auth) GetCallbackHandler(callback func(store.MemberAccessToken)) http.HandlerFunc {
+func (a auth) GetCallbackHandler(callback func(string, store.MemberAccessToken)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		values := r.URL.Query()
 		code := values.Get("oauth_verifier")
 		token := values.Get("oauth_token")
 
 		requestToken, ok := a.tokens[token]
-
 		if !ok {
-			http.Error(w, "Cannot find request token", http.StatusInternalServerError)
+			a.triggerServerError(w, "Cannot find request token")
 		}
 
+		// Get AccessToken
 		accessToken, err := a.consumer.AuthorizeToken(requestToken, code)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			a.triggerServerError(w, err.Error())
 		}
 
-		callback(store.MemberAccessToken(*accessToken))
+		// Create Client for API requests
+		client, err := a.consumer.MakeHttpClient(accessToken)
+		if err != nil {
+			a.triggerServerError(w, err.Error())
+		}
+
+		// Get member ID
+		res, err := client.Get("https://trello.com/1/members/me")
+		if err != nil {
+			a.triggerServerError(w, err.Error())
+		}
+		defer res.Body.Close()
+
+		// Parse response
+		data, err := ioutil.ReadAll(res.Body)
+		if err != nil {
+			a.triggerServerError(w, err.Error())
+		}
+
+		var m member
+		err = json.Unmarshal(data, &m)
+
+		if err != nil {
+			a.triggerServerError(w, err.Error())
+		}
+
+		callback(m.ID, store.MemberAccessToken(*accessToken))
 	}
+}
+
+func (a auth) triggerServerError(w http.ResponseWriter, err string) {
+	http.Error(w, err, http.StatusInternalServerError)
 }

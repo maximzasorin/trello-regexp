@@ -22,31 +22,20 @@ var (
 
 func main() {
 	appName = flag.String(
-		"name",
-		"Trello Regexp",
-		"Name of App",
+		"name", "Trello Regexp", "Name of App",
 	)
 	appURL = flag.String(
-		"url",
-		"http://localhost:8080",
-		"App url.",
+		"url", "http://localhost:8080", "App url.",
 	)
 	dbFile = flag.String(
-		"file",
-		"bolt.db",
-		"Storage file.",
+		"file", "bolt.db", "Storage file.",
 	)
 	trelloKey = flag.String(
-		"key",
-		"",
-		"Trello key from https://trello.com/1/appKey/generate.",
+		"key", "", "Trello key from https://trello.com/1/appKey/generate.",
 	)
 	trelloSecret = flag.String(
-		"secret",
-		"",
-		"Trello secret from https://trello.com/1/appKey/generate.",
+		"secret", "", "Trello secret from https://trello.com/1/appKey/generate.",
 	)
-
 	flag.Parse()
 
 	// Create auth
@@ -64,12 +53,10 @@ func main() {
 	}
 	s := store.NewStore(db)
 
-	trello := trello.NewTrello()
-
 	// Create handlers
 	redirectHandler := auth.GetRedirectHandler()
-	callbackHandler := auth.GetCallbackHandler(func(accessToken store.MemberAccessToken) {
-		s.SaveToken(&accessToken)
+	callbackHandler := auth.GetCallbackHandler(func(ID string, token store.MemberAccessToken) {
+		s.SaveMember(ID, &store.Member{AccessToken: token})
 	})
 
 	// Routes
@@ -78,7 +65,6 @@ func main() {
 	http.HandleFunc("/auth/callback", callbackHandler)
 
 	err = http.ListenAndServe(":8080", nil)
-
 	if err != nil {
 		log.Fatal(err)
 	}
