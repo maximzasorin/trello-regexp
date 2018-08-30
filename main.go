@@ -18,46 +18,36 @@ var (
 	dbFile       *string
 	trelloKey    *string
 	trelloSecret *string
+	secret       *string
 )
 
 func main() {
-	appName = flag.String(
-		"name", "Trello Regexp", "Name of App",
-	)
-	appURL = flag.String(
-		"url", "http://localhost:8080", "App url.",
-	)
-	dbFile = flag.String(
-		"file", "bolt.db", "Storage file.",
-	)
-	trelloKey = flag.String(
-		"key", "", "Trello key from https://trello.com/1/appKey/generate.",
-	)
-	trelloSecret = flag.String(
-		"secret", "", "Trello secret from https://trello.com/1/appKey/generate.",
-	)
+	appName = flag.String("name", "Trello Regexp", "Name of App")
+	appURL = flag.String("url", "http://localhost:8080", "App url.")
+	dbFile = flag.String("file", "bolt.db", "Storage file.")
+	trelloKey = flag.String("trelloKey", "", "Trello key from https://trello.com/1/appKey/generate.")
+	trelloSecret = flag.String("trelloSecret", "", "Trello secret from https://trello.com/1/appKey/generate.")
+	secret = flag.String("secret", "", "Secret for generate JWT.")
 	flag.Parse()
-
-	// Create auth
-	auth := auth.NewAuth(&auth.Config{
-		Name:        *appName,
-		CallbackURL: *appURL + "/auth/callback",
-		Key:         *trelloKey,
-		Secret:      *trelloSecret,
-	})
 
 	// Create store
 	db, err := bolt.Open("bolt.db", 0600, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
-	s := store.NewStore(db)
+	st := store.NewStore(db)
+
+	// Create auth
+	auth := auth.NewAuth(&auth.Config{
+		Name:         *appName,
+		CallbackURL:  *appURL + "/auth/callback",
+		TrelloKey:    *trelloKey,
+		TrelloSecret: *trelloSecret,
+	}, st)
 
 	// Create handlers
 	redirectHandler := auth.GetRedirectHandler()
-	callbackHandler := auth.GetCallbackHandler(func(ID string, token store.MemberAccessToken) {
-		s.SaveMember(ID, &store.Member{AccessToken: token})
-	})
+	callbackHandler := auth.GetCallbackHandler()
 
 	// Routes
 	http.HandleFunc("/", serveHomePage)

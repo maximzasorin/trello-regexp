@@ -1,11 +1,9 @@
 package auth
 
 import (
-	"encoding/json"
-	"io/ioutil"
-	"log"
 	"net/http"
 
+	"github.com/maximzasorin/trello-regexp/client"
 	"github.com/maximzasorin/trello-regexp/store"
 	"github.com/mrjones/oauth"
 )
@@ -13,22 +11,23 @@ import (
 // Auth allows auth with trello
 type Auth interface {
 	GetRedirectHandler() http.HandlerFunc
-	GetCallbackHandler(func(string, store.MemberAccessToken)) http.HandlerFunc
+	GetCallbackHandler() http.HandlerFunc
+	GetHttpClient(*oauth.AccessToken) (*http.Client, error)
 }
 
 // Config represents config for auth
 type Config struct {
-	Name        string
-	CallbackURL string
-	Key         string
-	Secret      string
+	Name         string
+	CallbackURL  string
+	TrelloKey    string
+	TrelloSecret string
 }
 
 // NewAuth create new auth object
-func NewAuth(config *Config) Auth {
+func NewAuth(config *Config, store store.Store) Auth {
 	consumer := oauth.NewConsumer(
-		config.Key,
-		config.Secret,
+		config.TrelloKey,
+		config.TrelloSecret,
 		oauth.ServiceProvider{
 			RequestTokenUrl:   "https://trello.com/1/OAuthGetRequestToken",
 			AuthorizeTokenUrl: "https://trello.com/1/OAuthAuthorizeToken",
@@ -42,11 +41,12 @@ func NewAuth(config *Config) Auth {
 
 	tokens := make(map[string]*oauth.RequestToken)
 
-	return auth{config, consumer, tokens}
+	return auth{config, store, consumer, tokens}
 }
 
 type auth struct {
 	config   *Config
+	store    store.Store
 	consumer *oauth.Consumer
 	tokens   map[string]*oauth.RequestToken
 }
@@ -59,14 +59,14 @@ func (a auth) GetRedirectHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		token, requestURL, err := a.consumer.GetRequestTokenAndUrl(a.config.CallbackURL)
 		if err != nil {
-			log.Fatal(err)
+			a.triggerServerError(w, err.Error())
 		}
 		a.tokens[token.Token] = token
 		http.Redirect(w, r, requestURL, http.StatusTemporaryRedirect)
 	}
 }
 
-func (a auth) GetCallbackHandler(callback func(string, store.MemberAccessToken)) http.HandlerFunc {
+func (a auth) GetCallbackHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		values := r.URL.Query()
 		code := values.Get("oauth_verifier")
@@ -75,42 +75,40 @@ func (a auth) GetCallbackHandler(callback func(string, store.MemberAccessToken))
 		requestToken, ok := a.tokens[token]
 		if !ok {
 			a.triggerServerError(w, "Cannot find request token")
+			return
 		}
 
 		// Get AccessToken
 		accessToken, err := a.consumer.AuthorizeToken(requestToken, code)
 		if err != nil {
 			a.triggerServerError(w, err.Error())
+			return
 		}
 
 		// Create Client for API requests
-		client, err := a.consumer.MakeHttpClient(accessToken)
+		httpClient, err := a.GetHttpClient(accessToken)
 		if err != nil {
 			a.triggerServerError(w, err.Error())
+			return
 		}
 
-		// Get member ID
-		res, err := client.Get("https://trello.com/1/members/me")
+		client := client.NewClient(httpClient)
+		clientMember, err := client.GetMe()
 		if err != nil {
 			a.triggerServerError(w, err.Error())
-		}
-		defer res.Body.Close()
-
-		// Parse response
-		data, err := ioutil.ReadAll(res.Body)
-		if err != nil {
-			a.triggerServerError(w, err.Error())
+			return
 		}
 
-		var m member
-		err = json.Unmarshal(data, &m)
-
-		if err != nil {
-			a.triggerServerError(w, err.Error())
-		}
-
-		callback(m.ID, store.MemberAccessToken(*accessToken))
+		a.store.SaveMember(&store.Member{
+			ID:          clientMember.ID,
+			AccessToken: *accessToken,
+		})
 	}
+}
+
+// GetHttpClient return HTTP client for make API responses
+func (a auth) GetHttpClient(accessToken *oauth.AccessToken) (*http.Client, error) {
+	return a.consumer.MakeHttpClient(accessToken)
 }
 
 func (a auth) triggerServerError(w http.ResponseWriter, err string) {

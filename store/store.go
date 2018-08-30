@@ -2,27 +2,20 @@ package store
 
 import (
 	"encoding/json"
-	"fmt"
-	"log"
 
 	"github.com/coreos/bbolt"
+	"github.com/mrjones/oauth"
 )
 
 // Store for everything
 type Store interface {
-	SaveMember(ID string, member *Member)
+	SaveMember(member *Member) error
 }
 
 // Member represents Trello user
 type Member struct {
-	AccessToken MemberAccessToken
-}
-
-// MemberAccessToken represents user's token for access to Trello API
-type MemberAccessToken struct {
-	Token          string
-	Secret         string
-	AdditionalData map[string]string
+	ID          string
+	AccessToken oauth.AccessToken
 }
 
 // NewStore creates new store
@@ -35,7 +28,7 @@ type store struct {
 }
 
 // SaveMember saves member to store
-func (s *store) SaveMember(ID string, member *Member) {
+func (s *store) SaveMember(member *Member) error {
 	err := s.db.Update(func(tx *bolt.Tx) error {
 		bucket, err := tx.CreateBucketIfNotExists([]byte("members"))
 		if err != nil {
@@ -47,14 +40,14 @@ func (s *store) SaveMember(ID string, member *Member) {
 			return err
 		}
 
-		bucket.Put([]byte(ID), buf)
+		bucket.Put([]byte(member.ID), buf)
 
 		return nil
 	})
 
 	if err != nil {
-		log.Fatal("Cannot save token for member #" + ID)
+		return err
 	}
 
-	fmt.Println("Member #" + ID + " saved")
+	return nil
 }
