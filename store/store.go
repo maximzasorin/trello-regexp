@@ -10,6 +10,7 @@ import (
 // Store for everything
 type Store interface {
 	SaveMember(member *Member) error
+	GetMember(ID string) (*Member, error)
 }
 
 // Member represents Trello user
@@ -50,4 +51,34 @@ func (s *store) SaveMember(member *Member) error {
 	}
 
 	return nil
+}
+
+// GetMember return member data
+func (s *store) GetMember(ID string) (*Member, error) {
+	var member *Member
+
+	err := s.db.View(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket([]byte("members"))
+		if bucket == nil {
+			return nil
+		}
+
+		buf := bucket.Get([]byte(ID))
+		if buf == nil {
+			return nil
+		}
+
+		err := json.Unmarshal(buf, &member)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return member, nil
 }

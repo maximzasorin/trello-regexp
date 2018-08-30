@@ -20,11 +20,12 @@ type client struct {
 	HttpClient *http.Client
 }
 
-// Member Represents API member
+// Member represents API member
 type Member struct {
 	ID string
 }
 
+// GetMe return current member
 func (c client) GetMe() (*Member, error) {
 	var m Member
 	err := c.makeGetRequest("members/me", &m)

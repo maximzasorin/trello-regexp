@@ -41,7 +41,7 @@ func NewAuth(config *Config, store store.Store) Auth {
 
 	tokens := make(map[string]*oauth.RequestToken)
 
-	return auth{config, store, consumer, tokens}
+	return &auth{config, store, consumer, tokens}
 }
 
 type auth struct {
@@ -51,11 +51,8 @@ type auth struct {
 	tokens   map[string]*oauth.RequestToken
 }
 
-type member struct {
-	ID string
-}
-
-func (a auth) GetRedirectHandler() http.HandlerFunc {
+// GetRedirectHandler returns http handler for redirect to Oauth provider
+func (a *auth) GetRedirectHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		token, requestURL, err := a.consumer.GetRequestTokenAndUrl(a.config.CallbackURL)
 		if err != nil {
@@ -66,7 +63,8 @@ func (a auth) GetRedirectHandler() http.HandlerFunc {
 	}
 }
 
-func (a auth) GetCallbackHandler() http.HandlerFunc {
+// GetRedirectHandler returns http handler for process callback from Oauth provider
+func (a *auth) GetCallbackHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		values := r.URL.Query()
 		code := values.Get("oauth_verifier")
@@ -99,18 +97,33 @@ func (a auth) GetCallbackHandler() http.HandlerFunc {
 			return
 		}
 
-		a.store.SaveMember(&store.Member{
-			ID:          clientMember.ID,
-			AccessToken: *accessToken,
-		})
+		// Update member data
+		member, err := a.store.GetMember(clientMember.ID)
+		if err != nil {
+			a.triggerServerError(w, err.Error())
+			return
+		}
+
+		// Update access token
+		if member == nil {
+			member = &store.Member{
+				ID: clientMember.ID,
+			}
+		}
+		member.AccessToken = *accessToken
+
+		err = a.store.SaveMember(member)
+		if err != nil {
+			a.triggerServerError(w, err.Error())
+		}
 	}
 }
 
 // GetHttpClient return HTTP client for make API responses
-func (a auth) GetHttpClient(accessToken *oauth.AccessToken) (*http.Client, error) {
+func (a *auth) GetHttpClient(accessToken *oauth.AccessToken) (*http.Client, error) {
 	return a.consumer.MakeHttpClient(accessToken)
 }
 
-func (a auth) triggerServerError(w http.ResponseWriter, err string) {
+func (a *auth) triggerServerError(w http.ResponseWriter, err string) {
 	http.Error(w, err, http.StatusInternalServerError)
 }

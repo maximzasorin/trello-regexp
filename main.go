@@ -24,14 +24,14 @@ var (
 func main() {
 	appName = flag.String("name", "Trello Regexp", "Name of App")
 	appURL = flag.String("url", "http://localhost:8080", "App url.")
-	dbFile = flag.String("file", "bolt.db", "Storage file.")
+	dbFile = flag.String("file", "store.db", "Storage file.")
 	trelloKey = flag.String("trelloKey", "", "Trello key from https://trello.com/1/appKey/generate.")
 	trelloSecret = flag.String("trelloSecret", "", "Trello secret from https://trello.com/1/appKey/generate.")
 	secret = flag.String("secret", "", "Secret for generate JWT.")
 	flag.Parse()
 
 	// Create store
-	db, err := bolt.Open("bolt.db", 0600, nil)
+	db, err := bolt.Open(*dbFile, 0600, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
