@@ -24,7 +24,7 @@ type Config struct {
 }
 
 // NewAuth create new auth object
-func NewAuth(config *Config, store store.Store) Auth {
+func NewAuth(store store.Store, jwt Jwt, config *Config) Auth {
 	consumer := oauth.NewConsumer(
 		config.TrelloKey,
 		config.TrelloSecret,
@@ -41,12 +41,13 @@ func NewAuth(config *Config, store store.Store) Auth {
 
 	tokens := make(map[string]*oauth.RequestToken)
 
-	return &auth{config, store, consumer, tokens}
+	return &auth{store, jwt, config, consumer, tokens}
 }
 
 type auth struct {
-	config   *Config
 	store    store.Store
+	jwt      Jwt
+	config   *Config
 	consumer *oauth.Consumer
 	tokens   map[string]*oauth.RequestToken
 }
@@ -72,7 +73,7 @@ func (a *auth) GetCallbackHandler() http.HandlerFunc {
 
 		requestToken, ok := a.tokens[token]
 		if !ok {
-			a.triggerServerError(w, "Cannot find request token")
+			http.Redirect(w, r, "/?auth=error", http.StatusPermanentRedirect)
 			return
 		}
 
@@ -116,6 +117,15 @@ func (a *auth) GetCallbackHandler() http.HandlerFunc {
 		if err != nil {
 			a.triggerServerError(w, err.Error())
 		}
+
+		// Auth browser with jwt
+		err = a.jwt.AuthMember(w, member)
+		if err != nil {
+			a.triggerServerError(w, err.Error())
+			return
+		}
+
+		http.Redirect(w, r, "/?auth=success", http.StatusPermanentRedirect)
 	}
 }
 

@@ -12,22 +12,16 @@ import (
 	"github.com/maximzasorin/trello-regexp/store"
 )
 
-var (
-	appName      *string
-	appURL       *string
-	dbFile       *string
-	trelloKey    *string
-	trelloSecret *string
-	secret       *string
-)
-
 func main() {
-	appName = flag.String("name", "Trello Regexp", "Name of App")
-	appURL = flag.String("url", "http://localhost:8080", "App url.")
-	dbFile = flag.String("file", "store.db", "Storage file.")
-	trelloKey = flag.String("trelloKey", "", "Trello key from https://trello.com/1/appKey/generate.")
-	trelloSecret = flag.String("trelloSecret", "", "Trello secret from https://trello.com/1/appKey/generate.")
-	secret = flag.String("secret", "", "Secret for generate JWT.")
+	var (
+		appName      = flag.String("name", "Trello Regexp", "Name of App")
+		appURL       = flag.String("url", "http://localhost:8080", "App url.")
+		dbFile       = flag.String("file", "store.db", "Storage file.")
+		trelloKey    = flag.String("trelloKey", "", "Trello key from https://trello.com/1/appKey/generate.")
+		trelloSecret = flag.String("trelloSecret", "", "Trello secret from https://trello.com/1/appKey/generate.")
+		secret       = flag.String("secret", "", "Secret for generate JWT.")
+		cookieName   = flag.String("cookieName", "trello_regexp", "Name of JWT cookie.")
+	)
 	flag.Parse()
 
 	// Create store
@@ -37,13 +31,16 @@ func main() {
 	}
 	st := store.NewStore(db)
 
+	// Create jwt
+	jwt := auth.NewJwt(*secret, *cookieName)
+
 	// Create auth
-	auth := auth.NewAuth(&auth.Config{
+	auth := auth.NewAuth(st, jwt, &auth.Config{
 		Name:         *appName,
 		CallbackURL:  *appURL + "/auth/callback",
 		TrelloKey:    *trelloKey,
 		TrelloSecret: *trelloSecret,
-	}, st)
+	})
 
 	// Create handlers
 	redirectHandler := auth.GetRedirectHandler()
