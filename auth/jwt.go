@@ -11,6 +11,7 @@ import (
 // Jwt allow works with JWT
 type Jwt interface {
 	AuthMember(w http.ResponseWriter, member *store.Member) error
+	VerifyTokenFromHeader(r *http.Request) *store.Member
 	GetSecret() string
 }
 
@@ -43,6 +44,17 @@ func (j *jwt) AuthMember(w http.ResponseWriter, member *store.Member) error {
 	}
 
 	http.SetCookie(w, &cookieVar)
+
+	return nil
+}
+
+func (j *jwt) VerifyTokenFromHeader(r *http.Request) *store.Member {
+	authorization := r.Header.Get("Authorization")
+	if authorization == "" {
+		return nil
+	}
+
+	// Verify token
 
 	return nil
 }

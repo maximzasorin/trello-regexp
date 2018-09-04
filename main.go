@@ -7,8 +7,10 @@ import (
 	"net/http"
 
 	"github.com/coreos/bbolt"
+	"github.com/gorilla/mux"
 
 	"github.com/maximzasorin/trello-regexp/auth"
+	"github.com/maximzasorin/trello-regexp/rest"
 	"github.com/maximzasorin/trello-regexp/store"
 )
 
@@ -42,14 +44,21 @@ func main() {
 		TrelloSecret: *trelloSecret,
 	})
 
-	// Create handlers
-	redirectHandler := auth.GetRedirectHandler()
-	callbackHandler := auth.GetCallbackHandler()
-
 	// Routes
-	http.HandleFunc("/", serveHomePage)
-	http.HandleFunc("/auth", redirectHandler)
-	http.HandleFunc("/auth/callback", callbackHandler)
+	r := mux.NewRouter()
+	r.HandleFunc("/", serveHomePage)
+	r.HandleFunc("/auth", auth.GetRedirectHandler())
+	r.HandleFunc("/auth/callback", auth.GetCallbackHandler())
+
+	// API
+	rest := rest.NewRest(jwt)
+	s := r.PathPrefix("/api").Subrouter()
+	s.Use(rest.GetAuthMiddleware())
+	s.HandleFunc("/me", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, "{}")
+	})
+
+	http.Handle("/", r)
 
 	err = http.ListenAndServe(":8080", nil)
 	if err != nil {
