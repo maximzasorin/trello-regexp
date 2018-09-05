@@ -51,12 +51,10 @@ func main() {
 	r.HandleFunc("/auth/callback", auth.GetCallbackHandler())
 
 	// API
-	rest := rest.NewRest(jwt)
+	rest := rest.NewRest(jwt, st)
 	s := r.PathPrefix("/api").Subrouter()
 	s.Use(rest.GetAuthMiddleware())
-	s.HandleFunc("/me", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprint(w, "{}")
-	})
+	rest.Expose(s)
 
 	http.Handle("/", r)
 

@@ -119,7 +119,7 @@ func (a *auth) GetCallbackHandler() http.HandlerFunc {
 		}
 
 		// Auth browser with jwt
-		err = a.jwt.AuthMember(w, member)
+		err = a.jwt.AuthMember(w, member.ID)
 		if err != nil {
 			a.triggerServerError(w, err.Error())
 			return
